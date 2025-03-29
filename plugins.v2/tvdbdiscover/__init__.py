@@ -12,28 +12,28 @@ from app.schemas.types import ChainEventType
 from app.utils.http import RequestUtils
 
 
-class TvdbDiscover(_PluginBase):
+class JavDiscover(_PluginBase):
     # 插件名称
-    plugin_name = "TheTVDB探索"
+    plugin_name = "JavBus探索"
     # 插件描述
-    plugin_desc = "让探索支持TheTVDB的数据浏览。"
+    plugin_desc = "让探索支持JavBus的数据浏览。"
     # 插件图标
     plugin_icon = "TheTVDB_A.png"
     # 插件版本
     plugin_version = "1.1"
     # 插件作者
-    plugin_author = "jxxghp"
+    plugin_author = "fdulezi"
     # 作者主页
-    author_url = "https://github.com/jxxghp"
+    author_url = "https://github.com/fdulezi"
     # 插件配置项ID前缀
-    plugin_config_prefix = "tvdbdiscover_"
+    plugin_config_prefix = "javdiscover_"
     # 加载顺序
     plugin_order = 99
     # 可使用的用户级别
     auth_level = 1
 
     # 私有属性
-    _base_api = "https://api4.thetvdb.com/v4"
+    _base_api = "http://192.168.31.252:38803/api/"
     _enabled = False
     _proxy = False
     _api_key = None
@@ -62,11 +62,11 @@ class TvdbDiscover(_PluginBase):
         }]
         """
         return [{
-            "path": "/tvdb_discover",
-            "endpoint": self.tvdb_discover,
+            "path": "/javbus_discover",
+            "endpoint": self.javbus_discover,
             "methods": ["GET"],
-            "summary": "TheTVDB探索数据源",
-            "description": "获取TheTVDB探索数据",
+            "summary": "JavBus探索数据源",
+            "description": "获取JavBus探索数据",
         }]
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
@@ -146,139 +146,51 @@ class TvdbDiscover(_PluginBase):
         pass
 
     @cached(cache=TTLCache(maxsize=1, ttl=30 * 24 * 3600))
-    def __get_token(self) -> Optional[str]:
-        """
-        根据APIKEY获取token使用
-        """
-        api_url = f"{self._base_api}/login"
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "apikey": self._api_key
-        }
-        res = RequestUtils(headers=headers).post_res(
-            api_url,
-            json=data,
-            proxies=settings.PROXY if self._proxy else None
-        )
-        if not res:
-            logger.error("获取TheMovieDB token失败")
-            return None
-        return res.json().get("data", {}).get("token")
 
     @cached(cache=TTLCache(maxsize=32, ttl=1800))
     def __request(self, mtype: str, **kwargs):
         """
-        请求TheTVDB API
+        请求JavBus API
         """
-        api_url = f"{self._base_api}/{mtype}/filter"
-        headers = {
-            "Accept": "application/json",
-            "Authorization": f"Bearer {self.__get_token()}"
-        }
+        api_url = f"{self._base_api}/movie"
+        headers = {"Accept": "application/json","Content-Type": "application/json"}
         res = RequestUtils(headers=headers).get_res(
             api_url,
-            params=kwargs,
-            proxies=settings.PROXY if self._proxy else None
+            params=kwargs
         )
         if res is None:
-            raise Exception("无法连接TheTVDB，请检查网络连接！")
+            raise Exception("无法连接JavBus，请检查网络连接！")
         if not res.ok:
-            raise Exception(f"请求TheTVDB API失败：{res.text}")
-        return res.json().get("data")
+            raise Exception(f"请求JavBus API失败：{res.text}")
+        return res.json().get("movies")
 
-    def tvdb_discover(self, apikey: str, mtype: str = "series",
+    def javbus_discover(self, apikey: str, mtype: str = "movie",
                       company: int = None, contentRating: int = None, country: str = "usa",
                       genre: int = None, lang: str = "eng", sort: str = "score", sortType: str = "desc",
                       status: int = None, year: int = None,
                       page: int = 1, count: int = 30) -> List[schemas.MediaInfo]:
         """
-        获取TheTVDB探索数据
+        获取JavBus探索数据
         """
 
         def __movie_to_media(movie_info: dict) -> schemas.MediaInfo:
             """
             电影数据转换为MediaInfo
-            {
-              "id": 353554,
-              "name": "I Am: Celine Dion",
-              "slug": "i-am-celine-dion",
-              "image": "/banners/v4/movie/353554/posters/6656173b5167f.jpg",
-              "nameTranslations": null,
-              "overviewTranslations": null,
-              "aliases": null,
-              "score": 22669,
-              "runtime": 102,
-              "status": {
-                "id": 5,
-                "name": "Released",
-                "recordType": "movie",
-                "keepUpdated": true
-              },
-              "lastUpdated": "2024-08-10 10:37:05",
-              "year": "2024"
+            {'date': '2025-03-28', 
+                'id': 'DVEH-051', 
+                'img': 'https://www.javbus.com/pics/thumb/b8xt.jpg', 
+                'title': '出張マッサージ師の巨根に欲求不満を隠せないHもバリキャリなアラサー独女OLのピタパン尻誘惑 美咲かんな', 
+                'tags': ['高清', '今日新種']
             }
             """
             return schemas.MediaInfo(
                 type="电影",
-                title=movie_info.get("name"),
-                year=movie_info.get("year"),
+                title=movie_info.get("title"),
                 title_year=f"{movie_info.get('name')} ({movie_info.get('year')})",
-                mediaid_prefix="tvdb",
                 media_id=str(movie_info.get("id")),
-                poster_path=f"https://www.thetvdb.com{movie_info.get('image')}",
-                vote_average=movie_info.get("score"),
-                runtime=movie_info.get("runtime"),
-                overview=movie_info.get("overview")
+                poster_path=movie_info.get('img')"
             )
 
-        def __series_to_media(series_info: dict) -> schemas.MediaInfo:
-            """
-            电视剧数据转换为MediaInfo
-            {
-              "id": 79399,
-              "name": "Who Wants to Be a Superhero?",
-              "slug": "who-wants-to-be-a-superhero",
-              "image": "https://artworks.thetvdb.com/banners/posters/79399-1.jpg",
-              "nameTranslations": null,
-              "overviewTranslations": null,
-              "aliases": null,
-              "firstAired": "2006-07-27",
-              "lastAired": "2007-09-06",
-              "nextAired": "",
-              "score": 190,
-              "status": {
-                "id": 2,
-                "name": "Ended",
-                "recordType": "series",
-                "keepUpdated": false
-              },
-              "originalCountry": "usa",
-              "originalLanguage": "eng",
-              "defaultSeasonType": 1,
-              "isOrderRandomized": false,
-              "lastUpdated": "2022-01-16 03:32:39",
-              "averageRuntime": 45,
-              "episodes": null,
-              "overview": "",
-              "year": "2006"
-            }
-            """
-            return schemas.MediaInfo(
-                type="电视剧",
-                title=series_info.get("name"),
-                year=series_info.get("year"),
-                title_year=f"{series_info.get('name')} ({series_info.get('year')})",
-                mediaid_prefix="tvdb",
-                media_id=str(series_info.get("id")),
-                release_date=series_info.get("firstAired"),
-                poster_path=series_info.get("image"),
-                vote_average=series_info.get("score"),
-                runtime=series_info.get("averageRuntime"),
-                overview=series_info.get("overview")
-            )
 
         if apikey != settings.API_TOKEN:
             return []
@@ -306,14 +218,11 @@ class TvdbDiscover(_PluginBase):
             return []
         if not result:
             return []
-        if mtype == "movies":
-            results = [__movie_to_media(movie) for movie in result]
-        else:
-            results = [__series_to_media(series) for series in result]
+        results = [__movie_to_media(movie) for movie in result]
         return results[(page - 1) * count:page * count]
 
     @staticmethod
-    def tvdb_filter_ui() -> List[dict]:
+    def javbus_filter_ui() -> List[dict]:
         """
         TheTVDB过滤参数UI配置
         """
@@ -352,18 +261,7 @@ class TvdbDiscover(_PluginBase):
 
         # 原始语种字典
         lang_dict = {
-            "eng": "英语",
-            "chi": "中文",
-            "jpn": "日语",
-            "kor": "韩语",
-            "hin": "印地语",
-            "fra": "法语",
-            "deu": "德语",
-            "ita": "意大利语",
-            "spa": "西班牙语",
-            "por": "葡萄牙语",
-            "rus": "俄语",
-            "other": "其他"
+            "eng": "英语"
         }
 
         lang_ui = [
@@ -380,41 +278,7 @@ class TvdbDiscover(_PluginBase):
 
         # 风格字典
         genre_dict = {
-            "1": "Soap",
-            "2": "Science Fiction",
-            "3": "Reality",
-            "4": "News",
-            "5": "Mini-Series",
-            "6": "Horror",
-            "7": "Home and Garden",
-            "8": "Game Show",
-            "9": "Food",
-            "10": "Fantasy",
-            "11": "Family",
-            "12": "Drama",
-            "13": "Documentary",
-            "14": "Crime",
-            "15": "Comedy",
-            "16": "Children",
-            "17": "Animation",
-            "18": "Adventure",
-            "19": "Action",
-            "21": "Sport",
-            "22": "Suspense",
-            "23": "Talk Show",
-            "24": "Thriller",
-            "25": "Travel",
-            "26": "Western",
-            "27": "Anime",
-            "28": "Romance",
-            "29": "Musical",
-            "30": "Podcast",
-            "31": "Mystery",
-            "32": "Indie",
-            "33": "History",
-            "34": "War",
-            "35": "Martial Arts",
-            "36": "Awards Show"
+            "1": "Soap"
         }
 
         genre_ui = [
@@ -614,9 +478,9 @@ class TvdbDiscover(_PluginBase):
             return
         event_data: DiscoverSourceEventData = event.event_data
         tvdb_source = schemas.DiscoverMediaSource(
-            name="TheTVDB",
-            mediaid_prefix="tvdb",
-            api_path=f"plugin/TvdbDiscover/tvdb_discover?apikey={settings.API_TOKEN}",
+            name="JavBus",
+            mediaid_prefix="javbus",
+            api_path=f"plugin/JavBusDiscover/javbus_discover?apikey={settings.API_TOKEN}",
             filter_params={
                 "mtype": "series",
                 "company": None,
@@ -629,7 +493,7 @@ class TvdbDiscover(_PluginBase):
                 "status": None,
                 "year": None,
             },
-            filter_ui=self.tvdb_filter_ui()
+            filter_ui=self.javbus_filter_ui()
         )
         if not event_data.extra_sources:
             event_data.extra_sources = [tvdb_source]
